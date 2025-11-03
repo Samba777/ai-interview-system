@@ -1,0 +1,8 @@
+.env
+__pycache__/
+*.pyc
+venv/
+data/temp_recordings/
+data/models/
+.vscode/
+.DS_Store
