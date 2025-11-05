@@ -52,33 +52,43 @@ def render_video_recorder(key="video"):
     
     st.markdown("**📹 Video Recording:**")
     
-    # WebRTC streamer
-    ctx = webrtc_streamer(
-        key=key,
-        video_processor_factory=VideoFrameCollector,
-        rtc_configuration=RTC_CONFIGURATION,
-        media_stream_constraints={"video": True, "audio": False},
-        async_processing=True,
-    )
+    # Initialize session state for this component
+    if f"{key}_initialized" not in st.session_state:
+        st.session_state[f"{key}_initialized"] = True
     
-    # Show status with better feedback
-    if ctx.state.playing:
-        st.success("🔴 Recording... Speak and look at camera!")
+    try:
+        # WebRTC streamer
+        ctx = webrtc_streamer(
+            key=key,
+            video_processor_factory=VideoFrameCollector,
+            rtc_configuration=RTC_CONFIGURATION,
+            media_stream_constraints={"video": True, "audio": False},
+            async_processing=True,
+        )
         
-        if ctx.video_processor:
-            st.caption(f"Captured {len(ctx.video_processor.frames)} frames")
+        # Show status with better feedback
+        if ctx.state.playing:
+            st.success("🔴 Recording... Speak and look at camera!")
+            
+            if ctx.video_processor:
+                frame_count = len(ctx.video_processor.frames)
+                st.caption(f"Captured {frame_count} frames")
+        
+        elif ctx.state.signalling:
+            st.warning("⏳ Connecting to camera... Please wait")
+        
+        else:
+            st.info("👆 Click START to begin recording")
+        
+        # Return frames when stopped
+        if not ctx.state.playing and ctx.video_processor:
+            frames = ctx.video_processor.frames
+            if len(frames) > 0:
+                st.success(f"✅ Recorded {len(frames)} frames!")
+                return frames
     
-    elif ctx.state.signalling:
-        st.warning("⏳ Connecting to camera... Please wait (10-30 seconds)")
-        st.caption("If it takes longer than 30 seconds, try refreshing the page")
-    
-    else:
-        st.info("👆 Click START to begin recording")
-    
-    # Return frames when stopped
-    if not ctx.state.playing and ctx.video_processor and len(ctx.video_processor.frames) > 0:
-        frames = ctx.video_processor.frames
-        st.success(f"✅ Recorded {len(frames)} frames!")
-        return frames
+    except Exception as e:
+        st.error(f"Video recorder error: {str(e)}")
+        st.info("Please refresh the page and try again")
     
     return None
