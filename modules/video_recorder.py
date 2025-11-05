@@ -29,21 +29,22 @@ class VideoFrameCollector(VideoProcessorBase):
             
             self.frame_count += 1
             
-            # Draw frame counter on video
-            cv2.putText(img, f"Frames: {self.frame_count}", (10, 30), 
-                       cv2.FONT_HERSHEY_SIMPLEX, 1, (0, 255, 0), 2)
-            
-            # Return frame for display
-            return av.VideoFrame.from_ndarray(img, format="bgr24")
+            # Return frame directly (faster - no text overlay)
+            return frame
         except Exception as e:
             print(f"Error in recv: {e}")
             return frame
 
 
-# RTC Configuration
-RTC_CONFIGURATION = RTCConfiguration(
-    {"iceServers": [{"urls": ["stun:stun.l.google.com:19302"]}]}
-)
+# Better RTC Configuration with multiple STUN servers
+RTC_CONFIGURATION = RTCConfiguration({
+    "iceServers": [
+        {"urls": ["stun:stun.l.google.com:19302"]},
+        {"urls": ["stun:stun1.l.google.com:19302"]},
+        {"urls": ["stun:stun2.l.google.com:19302"]},
+        {"urls": ["stun:stun3.l.google.com:19302"]},
+    ]
+})
 
 
 def render_video_recorder(key="video"):
@@ -60,12 +61,17 @@ def render_video_recorder(key="video"):
         async_processing=True,
     )
     
-    # Show status
+    # Show status with better feedback
     if ctx.state.playing:
         st.success("🔴 Recording... Speak and look at camera!")
         
         if ctx.video_processor:
             st.caption(f"Captured {len(ctx.video_processor.frames)} frames")
+    
+    elif ctx.state.signalling:
+        st.warning("⏳ Connecting to camera... Please wait (10-30 seconds)")
+        st.caption("If it takes longer than 30 seconds, try refreshing the page")
+    
     else:
         st.info("👆 Click START to begin recording")
     
