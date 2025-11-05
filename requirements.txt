@@ -17,7 +17,8 @@ python-decouple==3.8
 python-dotenv==1.0.0
 pydub==0.25.1
 textblob==0.17.1
-huggingface_hub==0.16.4
+huggingface-hub==0.16.4
 transformers==4.30.0
 sentence-transformers==2.2.2
 torch==2.0.0
+tokenizers==0.13.3
