@@ -69,17 +69,10 @@ def render_video_recorder(key="video"):
     
     st.markdown("**📹 Video Recording:**")
     
-    # Initialize frame collector in session state
-    collector_key = f"{key}_collector"
-    if collector_key not in st.session_state:
-        st.session_state[collector_key] = VideoFrameCollector()
-    
-    collector = st.session_state[collector_key]
-    
-    # WebRTC streamer
+    # WebRTC streamer - let it create its own processor
     ctx = webrtc_streamer(
         key=key,
-        video_processor_factory=lambda: collector,
+        video_processor_factory=VideoFrameCollector,  # ✅ Pass class, not instance
         rtc_configuration=RTC_CONFIGURATION,
         media_stream_constraints={"video": True, "audio": False},
         async_processing=True,
@@ -89,29 +82,32 @@ def render_video_recorder(key="video"):
     if ctx.state.playing:
         st.success("🔴 Recording... Speak and look at camera!")
         
-        # Show frame count
-        frame_count = len(collector.get_frames())
-        st.caption(f"Captured {frame_count} frames")
+        # Show frame count from the active processor
+        if ctx.video_processor:
+            frame_count = len(ctx.video_processor.get_frames())
+            st.caption(f"Captured {frame_count} frames")
         
         # Stop button
         if st.button("⏹️ Stop Recording", key=f"{key}_stop"):
-            ctx.video_processor.frames = []  # Reset for next recording
+            pass  # Stopping handled by webrtc_streamer
     
     else:
         st.info("👆 Click START to begin recording")
     
     # Return frames when stopped
-    if not ctx.state.playing and len(collector.get_frames()) > 0:
-        frames = collector.get_frames()
-        st.success(f"✅ Recorded {len(frames)} frames!")
+    if not ctx.state.playing and ctx.video_processor:
+        frames = ctx.video_processor.get_frames()
         
-        # Store in session state
-        frames_key = f"{key}_frames"
-        st.session_state[frames_key] = frames
-        
-        return frames
+        if len(frames) > 0:
+            st.success(f"✅ Recorded {len(frames)} frames!")
+            
+            # Store in session state
+            frames_key = f"{key}_frames"
+            st.session_state[frames_key] = frames
+            
+            return frames
     
-    # Check if frames exist in session state
+    # Check if frames exist in session state from previous recording
     frames_key = f"{key}_frames"
     if frames_key in st.session_state:
         return st.session_state[frames_key]
