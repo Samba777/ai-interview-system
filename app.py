@@ -329,10 +329,6 @@ def main():
                 with col1:
                     st.markdown("**Audio Recording:**")
                     audio_bytes = audio_recorder(
-                        text="Click to record",
-                        recording_color="#e74c3c",
-                        neutral_color="#3498db",
-                        icon_size="2x",
                         key=f"audio_{current_q}"
                     )
                     
