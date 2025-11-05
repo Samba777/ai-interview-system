@@ -1,101 +1,105 @@
 """
-Real-time Video Recording Module
-Uses streamlit-webrtc for continuous video capture
+Video Recording Module
+Real-time video recording using streamlit-webrtc
 """
-
 import streamlit as st
-from streamlit_webrtc import webrtc_streamer, VideoProcessorBase, RTCConfiguration
+from streamlit_webrtc import webrtc_streamer, WebRtcMode, RTCConfiguration
 import av
-import cv2
-import numpy as np
+import threading
 
 
-class VideoFrameCollector(VideoProcessorBase):
-    """Collects video frames in real-time during recording"""
+class VideoFrameCollector:
+    """
+    Collects video frames from WebRTC stream
+    """
     
-    def __init__(self):
-        print("✅ VideoFrameCollector initialized!")
+    def __init__(self, max_frames=150):
         self.frames = []
-        self.frame_count = 0
+        self.max_frames = max_frames
+        self.lock = threading.Lock()
     
-    def recv(self, frame):
-        """Called for each video frame"""
-        try:
-            print(f"🎥 recv() called - frame_count: {self.frame_count}")
-            
-            # Convert frame to numpy array
-            img = frame.to_ndarray(format="bgr24")
-            print(f"✅ Frame converted - shape: {img.shape}")
-            
-            # Store frame (limit to 150)
-            if len(self.frames) < 150:
-                self.frames.append(img.copy())
-                print(f"✅ Frame stored - total frames: {len(self.frames)}")
-            
-            self.frame_count += 1
-            
-            # CRITICAL FIX: Must return av.VideoFrame for proper rendering
-            return av.VideoFrame.from_ndarray(img, format="bgr24")
-        except Exception as e:
-            print(f"❌ Error in recv: {e}")
-            import traceback
-            traceback.print_exc()
-            return frame
-
-
-# Better RTC Configuration with multiple STUN servers
-RTC_CONFIGURATION = RTCConfiguration({
-    "iceServers": [
-        {"urls": ["stun:stun.l.google.com:19302"]},
-        {"urls": ["stun:stun1.l.google.com:19302"]},
-        {"urls": ["stun:stun2.l.google.com:19302"]},
-        {"urls": ["stun:stun3.l.google.com:19302"]},
-    ]
-})
-
-
-def render_video_recorder(key="video"):
-    """Render video recording interface"""
+    def add_frame(self, frame):
+        """Add frame to collection"""
+        with self.lock:
+            if len(self.frames) < self.max_frames:
+                self.frames.append(frame)
     
-    st.markdown("**📹 Video Recording:**")
+    def get_frames(self):
+        """Get collected frames"""
+        with self.lock:
+            return self.frames.copy()
     
-    # Initialize session state for this component
-    if f"{key}_initialized" not in st.session_state:
-        st.session_state[f"{key}_initialized"] = True
+    def clear(self):
+        """Clear frames"""
+        with self.lock:
+            self.frames = []
+
+
+def render_video_recorder(key="video_recorder"):
+    """
+    Render video recorder component
+    
+    Args:
+        key: Unique key for component
+    
+    Returns:
+        list of frames if recording complete, None otherwise
+    """
+    
+    # Initialize frame collector
+    if f"collector_{key}" not in st.session_state:
+        st.session_state[f"collector_{key}"] = VideoFrameCollector()
+    
+    collector = st.session_state[f"collector_{key}"]
+    
+    # Better WebRTC configuration with multiple STUN servers
+    rtc_configuration = RTCConfiguration({
+        "iceServers": [
+            {"urls": ["stun:stun.l.google.com:19302"]},
+            {"urls": ["stun:stun1.l.google.com:19302"]},
+            {"urls": ["stun:stun2.l.google.com:19302"]},
+        ]
+    })
+    
+    # Video processor callback
+    def video_frame_callback(frame):
+        img = frame.to_ndarray(format="bgr24")
+        collector.add_frame(img)
+        return frame
+    
+    # Render WebRTC streamer
+    st.markdown("**📹 Video Recording**")
     
     try:
-        # WebRTC streamer
-        ctx = webrtc_streamer(
+        webrtc_ctx = webrtc_streamer(
             key=key,
-            video_processor_factory=VideoFrameCollector,
-            rtc_configuration=RTC_CONFIGURATION,
+            mode=WebRtcMode.SENDRECV,
+            rtc_configuration=rtc_configuration,
+            video_frame_callback=video_frame_callback,
             media_stream_constraints={"video": True, "audio": False},
             async_processing=True,
         )
         
-        # Show status with better feedback
-        if ctx.state.playing:
+        # Show status
+        if webrtc_ctx.state.playing:
             st.success("🔴 Recording... Speak and look at camera!")
-            
-            if ctx.video_processor:
-                frame_count = len(ctx.video_processor.frames)
-                st.caption(f"Captured {frame_count} frames")
+            frame_count = len(collector.get_frames())
+            st.caption(f"Captured {frame_count} frames")
         
-        elif ctx.state.signalling:
+        elif webrtc_ctx.state.signalling:
             st.warning("⏳ Connecting to camera... Please wait")
         
         else:
             st.info("👆 Click START to begin recording")
         
         # Return frames when stopped
-        if not ctx.state.playing and ctx.video_processor:
-            frames = ctx.video_processor.frames
-            if len(frames) > 0:
-                st.success(f"✅ Recorded {len(frames)} frames!")
-                return frames
+        if not webrtc_ctx.state.playing and len(collector.get_frames()) > 0:
+            frames = collector.get_frames()
+            st.success(f"✅ Video captured! ({len(frames)} frames)")
+            return frames
     
     except Exception as e:
-        st.error(f"Video recorder error: {str(e)}")
-        st.info("Please refresh the page and try again")
+        st.error(f"Video error: {str(e)}")
+        st.info("Please refresh the page")
     
     return None
