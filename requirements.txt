@@ -16,3 +16,4 @@ plotly==5.18.0
 python-decouple==3.8
 python-dotenv==1.0.0
 pydub==0.25.1
+textblob==0.17.1

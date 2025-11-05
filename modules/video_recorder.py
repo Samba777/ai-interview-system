@@ -14,25 +14,32 @@ class VideoFrameCollector(VideoProcessorBase):
     """Collects video frames in real-time during recording"""
     
     def __init__(self):
+        print("✅ VideoFrameCollector initialized!")
         self.frames = []
         self.frame_count = 0
     
     def recv(self, frame):
         """Called for each video frame"""
         try:
+            print(f"🎥 recv() called - frame_count: {self.frame_count}")
+            
             # Convert frame to numpy array
             img = frame.to_ndarray(format="bgr24")
+            print(f"✅ Frame converted - shape: {img.shape}")
             
             # Store frame (limit to 150)
             if len(self.frames) < 150:
                 self.frames.append(img.copy())
+                print(f"✅ Frame stored - total frames: {len(self.frames)}")
             
             self.frame_count += 1
             
-            # Return frame directly (faster - no text overlay)
-            return frame
+            # CRITICAL FIX: Must return av.VideoFrame for proper rendering
+            return av.VideoFrame.from_ndarray(img, format="bgr24")
         except Exception as e:
-            print(f"Error in recv: {e}")
+            print(f"❌ Error in recv: {e}")
+            import traceback
+            traceback.print_exc()
             return frame
 
 
